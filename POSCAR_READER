@@ -1,0 +1,90 @@
+#!/bin/bash
+
+rm ATOM_LIST POSCAR_TEMP POSCAR_POSITION
+touch ATOM_LIST POSCAR_TEMP POSCAR_POSITION
+
+#Removes carriage at end of lines
+sed 's/\r//' POSCAR > POSCAR_TEMP
+
+#Set the XYZ CHGCAR FFT densitity
+NG_line=$(sed -n '1p' POSITIONS)
+NG_array=($NG_line)
+NGXF=${NG_array[0]}
+NGYF=${NG_array[1]}
+NGZF=${NG_array[2]}
+echo "FFT PARAMETERS: $NGXF $NGYF $NGZF"
+
+#TYPE ARRAY INITIALIZATION
+type_line=$(sed -n '6p' POSCAR_TEMP)
+type_array=($type_line)
+type_size=${#type_array[*]}
+
+#NUMBER ARRAY INITIALIZATION
+number_line=$(sed -n '7p' POSCAR_TEMP)
+number_array=($number_line)
+number_size=${#number_array[*]}
+
+#SET atomCount
+i="0"
+atomCount="0"
+while (( i<$number_size ))
+do
+        atomCount=$((atomCount+number_array[i]))
+        i=$[$i+1]
+done
+
+#CREATES POSCAR_POSITION FILE
+#description needed for creation process
+cat POSCAR | tail -n +9 | head -n $(($atomCount+9)) > POSCAR_POSITION
+echo "$(tr '\n' ' '< POSCAR_POSITION)" > POSCAR_POSITION
+
+#DECLARES position_array
+i="0"
+while (( i<$atomCount ))
+do
+        position_line=$(sed -n '1p' POSCAR_POSITION)
+        position_array=($position_line)
+        position_size=${#position_array[*]}
+        i=$[$i+1]
+done
+
+i="0"
+k="0"
+while (( i<$number_size ))
+do
+	j="0"
+	echo "${number_array[i]}"
+	while (( j<${number_array[i]} ))
+	do
+		echo "${type_array[i]}"
+		cd ./${type_array[i]}
+
+			#CREATE POSITIONS FILE
+			x=$(echo "${position_array[k]}")
+			y=$(echo "${position_array[k+1]}")
+			z=$(echo "${position_array[k+2]}")
+			echo "$NGXF $NGYF $NGZF" > POSITIONS
+			echo "$x $y $z" >> POSITIONS			
+			echo "$NGXF $NGYF $NGZF"
+
+			CHGCAR_READER
+
+			#CREATES CHGCAR_DATA AND CHG_DATA TEMP FILES
+			mv CHGCAR_DATA CHGCAR_DATA$j
+			
+			touch CHGCAR_HEAD
+			cat CHGCAR | head -n 8 > CHGCAR_HEAD
+			echo "$x $y $z" >> CHGCAR_HEAD
+			echo "" >> CHGCAR_HEAD
+			echo "$NGXF $NGYF $NGZF" >> CHGCAR_HEAD
+			cat CHGCAR_HEAD CHGCAR_DATA$j >> CHGCAR_$j
+
+		cd ..
+		j=$[$j+1]
+		k=$[$k+3]
+	done
+	i=$[$i+1]
+done
+
+rm POSCAR_TEMP POSCAR_POSITION CHGCAR_HEAD
+#POSITIONS FILE TO BE REMOVED IN FINISHER script

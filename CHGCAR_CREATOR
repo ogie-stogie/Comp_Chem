@@ -1,0 +1,244 @@
+#!/bin/bash
+
+#Asks user if in correct directory so that worng files aren't removed
+while true;do
+	echo "WARNING:"
+	echo "This program may recursively delete all subdirectories along with their files"
+        echo "Are you in the correct directory???"
+        echo "$(pwd)"
+        echo "YES(1) // NO(0)"
+        read -p ": " decision
+        if [ "$decision" == 1 ];then
+                break
+        elif [ "$decision" == 0 ];then
+                exit
+        else
+                echo "Enter correct input"
+        fi	
+done
+
+
+
+#Garbage Collection
+#echo "WARNING"
+#echo "OLD sub-directories and their files are not removed"
+rm AUGMENTER CHECK_AGAIN CHGCAR_DATA COMPLETED_JOBS JOB_NUMBERS NAIVE_CHGCAR NONCOMPLETED POSCAR_HEAD POSCAR_POSITION POSCAR_TEMP RUNNING_JOBS TEMP 
+rm ./*/*
+rmdir ./*
+#Check for POSCAR file
+	if [ ! -f POSCAR ]; then
+                echo "POSCAR File not found!"
+		exit
+        fi
+
+#Create temporary files here
+touch TEMP
+>TEMP
+touch POSCAR_HEAD
+>POSCAR_HEAD
+touch POSCAR_POSITION
+>POSCAR_POSITION
+cat POSCAR | head -n 5 > POSCAR_HEAD
+DorC_input=$(sed -n '8p' POSCAR)
+#Store atom type,number and position for later use in struct atom
+
+#NUMBER
+touch POSCAR_TEMP
+>POSCAR_TEMP
+#########################IMPORTANT############################
+#This sed command removes the carriage at the end of a line
+sed 's/\r//' POSCAR > POSCAR_TEMP
+number_line=$(sed -n '7p' POSCAR_TEMP)
+number_array=($number_line)
+number_size=${#number_array[*]}
+
+i="0"
+while (( i<$number_size ))
+do
+	atomCount=$((atomCount+number_array[i]))
+	i=$[$i+1]
+done
+
+cat POSCAR | tail -n +9 | head -n $(($atomCount+9)) > POSCAR_POSITION
+echo "$(tr '\n' ' '< POSCAR_POSITION)" > POSCAR_POSITION 
+
+
+#GRID
+#TAG:001
+
+#TYPE
+type_line=$(sed -n '6p' POSCAR_TEMP)
+type_array=($type_line)
+type_size=${#type_array[*]}
+
+#POSITION ARRAY INITIALIZATION
+i="0"
+while (( i<$atomCount ))
+do
+	position_line=$(sed -n '1p' POSCAR_POSITION) 
+	position_array=($position_line)
+	position_size=${#position_array[*]}
+	i=$[$i+1]
+done
+
+
+#Creates Directories and fills them with neccessary jobs for vasp jobs
+
+#Instantiate iterator variables (Possibly replace names with tangible meanings later)
+i="0"
+j="0"
+m="0"
+n="0"
+
+#1.Makes a directory for each distinct atom
+#2.Creates a POSCAR for each unique atom directory
+for (( i=0; i<$type_size; i++ ));
+do
+	#Create Directory
+        mkdir ${type_array[i]}
+
+        #Create POSCAR of single atom at center of given unit
+	cp POSCAR_HEAD ./${type_array[i]}/POSCAR
+        echo "${type_array[$i]}" >> ./${type_array[i]}/POSCAR
+        echo "1" >> ./${type_array[i]}/POSCAR
+        echo  "$DorC_input" >> ./${type_array[i]}/POSCAR
+	echo "0.5000 0.5000 0.5000" >> ./${type_array[i]}/POSCAR
+	
+	#Check for KPOINTS file
+	if [ ! -f KPOINTS ]; then
+    		echo "KPOINTS File not found!"
+		exit
+	fi
+	cd ./${type_array[i]}
+		cp ~/bin/KPOINTS KPOINTS
+	cd ..
+
+	#Create POTCAR from given POSCAR
+	cd ./${type_array[i]}
+		poscar2potcarExtractor
+	cd ..
+
+	#Create INCAR
+	if [ ! -f INCAR ]; then
+                echo "INCAR File not found!"
+                exit
+        fi
+	echo "${type_array[i]} ZVAL: "
+        echo "$(grep ZVAL POTCAR)"
+	cd ./${type_array[i]}
+		cp ../INCAR INCAR
+		#make changes to INCAR
+		read -p "Enter charge of ${type_array[i]}: " user_CHARGE
+		
+		#DECLARE user_NELECT
+                ZVAL_line=$(grep ZVAL POTCAR)
+                ZVAL_array=($ZVAL_line)
+
+                #REMOVE DECIMAL COMPONENT OF ZVAL
+		ZVAL=${ZVAL_array[5]%.*}
+                user_NELECT=$(($ZVAL-$user_CHARGE))
+		echo "${type_array[i]} charge: $user_NELECT"
+				
+		#PRINT NELECT TO INCAR
+		sed '/NELECT =/d' INCAR >> user_INCAR
+		echo " NELECT = $user_NELECT #Number of electrons" >> user_INCAR
+		rm INCAR
+		mv user_INCAR INCAR
+	cd ..
+	echo "WARNING"
+	echo "Hubbard Corrections Disabled"
+	
+	#Run vasp job on single atom
+	echo "WARNING"
+	echo "Running KPOINTS on gamma only"
+	cd ./${type_array[i]}
+		qvasp_gamma 2 1 ${type_array[i]}_SINGLE
+	cd ..
+	
+	sleep 1
+	squeue -u tbart
+done
+
+#Implement script that holds program until all jobs are completed
+CheckJobCompletion 
+sleep 30
+
+#DECLARE NG*F AND CREATE POSITIONS FILE
+cd ./${type_array[0]}
+	NG_line=$(sed -n '11p' CHGCAR)
+	NG_array=($NG_line)
+	echo "NG Values: $NG_line"
+	NGXF=${NG_array[0]}
+	NGYF=${NG_array[1]}
+	NGZF=${NG_array[2]}
+	echo "$NGXF $NGYF $NGZF"
+	echo "$NGXF $NGYF $NGZF" > ../POSITIONS
+cd ..
+
+#Create AUGMENTER file
+k="1"
+for (( i=0; i<$type_size; i++ ));
+do
+	cd ./${type_array[i]}
+		for(( j=0; j<${number_array[i]}; j++ ))
+		do
+			#grep command returns the line with the aug occ: [ string string atomNumber #augmentations$
+			aug_line=$(grep "augmentation occupancies" CHGCAR)
+			#Parse string into useful array
+			aug_array=($aug_line)
+
+			#use last element of array to find number of trailing lines after grep hit that contain au$
+			end_line=$(( ${aug_array[3]}/5 ))
+
+			#augmentations are stored in 5 columns, leftovers will be put in partially filed line
+			if (( ${aug_array[3]}%5 != 0 ));then
+        			end_line=$(( $end_line+1 ))
+			fi
+
+			#Create augmenter file
+			echo "${aug_array[0]} ${aug_array[1]} $k ${aug_array[3]}" >> ../AUGMENTER
+			grep -A $end_line "augmentation occupancies" CHGCAR | tail -$end_line >> ../AUGMENTER
+			k=$(( k+1 ))
+		done
+	cd ..
+done
+
+#Create individual CHGCAR files
+POSCAR_READER 
+
+#Superimpose all the CHGCAR files into one final CHGCAR file. Runs script file FINISHER
+FINISHER 
+
+#DECLARE NAIVE_CHGCAR_HEAD
+touch NAIVE_CHGCAR_HEAD
+>NAIVE_CHGCAR_HEAD
+cat POSCAR | head -n 8 > NAIVE_CHGCAR_HEAD
+
+i="0"
+j="0"
+while (( i<$atomCount ));
+do
+	echo "${position_array[j]} ${position_array[j+1]} ${position_array[j+2]}" >> NAIVE_CHGCAR_HEAD
+        j=$[$j+3]
+	i=$[$i+1]
+done
+
+printf "\n" >> NAIVE_CHGCAR_HEAD
+echo "$NGXF $NGYF $NGZF" >> NAIVE_CHGCAR_HEAD
+
+#DECLARE NAIVE_CHGCAR
+touch FINAL
+>FINAL
+cat NAIVE_CHGCAR_HEAD NAIVE_CHGCAR AUGMENTER >> FINAL
+mv FINAL NAIVE_CHGCAR
+
+#Garbage Collection
+rm POSCAR_HEAD
+rm POSCAR_TEMP
+rm POSCAR_POSITION
+rm TEMP
+rm FINAL
+rm NAIVE_CHGCAR_HEAD
+rm ATOM_LIST
+rm NAIVE_CHG
+

@@ -1,0 +1,26 @@
+#this code extracts the elements from the POSCAR and creates a POTCAR file in the same
+#directory
+#Remove tabs from POSCAR file
+sed -i $'s/\t/  /g' POSCAR
+
+#This code is used for POSCAR that state elements on the 6th line
+#If incorrect change 6p to (lineNumber)p
+line=$(sed -n '6p' POSCAR)
+#Make sure there is no space around = sign
+echo "$line"
+arr=($line)
+size=${#arr[*]}
+#Spaces do not matter as the array will only be filled by the Letters found on the line
+#Elements with two letters are kept together as one index in the array  (Ex. Ce Sn Al)
+i="0"
+string=""
+while [ $i -lt $size ]
+do
+	element=$(echo "${arr[$i]}" | tr -cd [:alpha:])
+	string="$string /home/cmuhich/potpaws/pbe/$element/POTCAR "
+	echo $string
+	i=$[$i+1]
+done
+cat $string > POTCAR
+grep PAW_PBE POTCAR
+#checks that all elements are included and in the correct order

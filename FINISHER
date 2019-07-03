@@ -1,0 +1,41 @@
+#! /bin/bash
+
+#THESE FILES ARE FREED TWICE UNNECESSARILY
+>NAIVE_CHGCAR
+>POSCAR_TEMP
+
+#DECLARES POSCAR_TEMP AS CARRIAGE-REMOVED POSCAR
+sed 's/\r//' POSCAR > POSCAR_TEMP
+
+#DECLARE NUMBER ARRAY
+number_line=$(sed -n '7p' POSCAR_TEMP)
+number_array=($number_line)
+number_size=${#number_array[*]}
+
+#DECLARE TYPE ARRAY
+type_line=$(sed -n '6p' POSCAR_TEMP)
+type_array=($type_line)
+type_size=${#type_array[*]}
+
+#CREATES NAIVE_CHG FILE
+i="0"
+j="0"
+while (( i<$number_size ))
+do
+        j="0"
+        while (( j<${number_array[i]} ))
+        do
+                echo "${type_array[i]}"
+                cd ./${type_array[i]}
+			mv ../NAIVE_CHGCAR NAIVE_CHGCAR
+			mv CHGCAR_$j CHGCAR_DATA
+			CHGCAR_SUPERPOSITION
+			mv NAIVE_CHGCAR ../NAIVE_CHGCAR
+			rm CHGCAR_DATA			
+                cd ..
+                j=$[$j+1]
+        done
+        i=$[$i+1]
+done
+
+rm POSCAR_TEMP

@@ -1,0 +1,101 @@
+#! /bin/bash
+
+secs=72000                         # Set interval (duration) in seconds.
+endTime=$(( $(date +%s) + secs )) # Calculate end time.
+completionCount="0"
+#Save username as a variable for later use
+job_directory=$(pwd)
+directory_array=$(echo "$job_directory" | tr "/" " ")
+directory_array=($directory_array)
+username=$(echo "${directory_array[1]}")
+echo "$username"
+number_of_sub_directories=$(echo */ | wc)
+number_of_sub_directories=($number_of_sub_directories)
+number_of_sub_directories=$(echo "${number_of_sub_directories[1]}")
+echo "Total number of jobs to run : $number_of_sub_directories"
+
+while [ $(date +%s) -lt $endTime ]; 
+do  # Loop until interval has elapsed.
+	
+	rm COMPLETED_JOBS RUNNING_JOBS JOB_NUMBERS TEMP NONCOMPLETED CHECK_AGAIN
+	touch COMPLETED_JOBS RUNNING_JOBS JOB_NUMBERS TEMP NONCOMPLETED CHECK_AGAIN
+	squeue -u $username
+	#Creates array of directories to be used in loops
+	OUTPUT4="$(ls -d */)"
+	completionCount="0" 
+	for name in $OUTPUT4 
+	do
+		cd $name
+		#Searches for string indicating finished job
+		###############################################
+		ans=`grep F= OSZICAR`
+		if [[ $ans ]]; 
+		then
+			echo "$(pwd)" >> ../COMPLETED_JOBS
+			completionCount=$[$completionCount+1]
+			echo "$completionCount"
+		else
+			squeue -u $username > jobs
+			awk '{print $1}' jobs > job_number
+			sed 1d job_number > ../JOB_NUMBERS
+			rm jobs job_number
+
+			run_jobs=`wc -l < ../JOB_NUMBERS`
+			ls > ../TEMP
+			i=1
+
+			while [ "$i" -le "$run_jobs" ]; 
+			do
+				check=`sed -n "${i}p" ../JOB_NUMBERS | awk '{print $1}'`
+				c=`grep $check ../TEMP`
+
+
+				if [ -z "$c" ]
+				then
+					echo .
+				else
+					echo "$(pwd)" >> ../RUNNING_JOBS
+					break
+
+				fi
+					i=$(($i + 1))
+				done
+
+
+				z=$(($run_jobs + 1))
+
+				if [ "$i" = "$z" ]; 
+				then
+					echo "$(pwd)" >> ../NONCOMPLETED
+					timeout12=`grep 'DUE TO TIME LIMIT' slurm-*`
+					preemt=`grep 'DUE TO PREEMPTION' slurm-*`
+
+					if [ -z "$timeout12" ] && [ -z "$preemt" ]
+					then
+
+						echo "check job $(pwd)"
+						echo "$(pwd)" >> ../CHECK_AGAIN
+					else
+						echo "i will run job here"
+						cp CONTCAR POSCAR
+						rm slurm*
+						qvasp_gamma 1 1 $name
+	
+					fi
+				fi
+	
+			fi
+			cd ../
+	
+		done
+
+	if [ $number_of_sub_directories == $completionCount ]
+	then
+		break
+	fi
+	sleep 10
+done
+echo All done
+
+#Garbage Collection
+rm CHECK_AGAIN RUNNING_JOBS JOB_NUMBERS

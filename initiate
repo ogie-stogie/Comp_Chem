@@ -1,0 +1,196 @@
+#!/bin/bash
+
+#Asks user if they are beginning or continuing a job
+
+while true;do
+	read -p "Beginning(1) or Continuing(2)" decision
+	if [ "$decision" == 1 ];then
+		break
+	elif [ "$decision" == 2 ];then
+		rm POSCAR
+		mv CONTCAR POSCAR
+		cat XDATCAR >> XDATSTORAGE
+		grep RUN XDATSTORAGE
+		read -p "What run is this?" counter
+		echo "RUN $counter" >> XDATSTORAGE
+		break
+	else
+		echo "Enter correct input"
+	fi
+done
+
+#beginning of initialization
+
+#Initial check for INCAR and user_INCAR
+
+rm user_INCAR
+less INCAR
+more ~/bin/alien
+while true; do
+	read -p "Want to CONTINUE? 1=YES, 2=NO: " decision
+	if [ "$decision" == 2 ]; then
+		exit
+	elif [ "$decision" != 2 ] && [ "$decision" != 1 ];then
+        	echo "Enter correct input"
+	else
+		break
+	fi
+done
+
+#save WAVECAR and CONTCAR
+
+while true; do
+	read -p "Want to save WAVECAR? 1=YES, 2=NO: " save_wavecar
+	if [ "$save_wavecar" == 2 ]; then
+		rm WAVECAR
+		break
+	elif [ "$save_wavecar" != 2 ] && [ "$save_wavecar" != 1 ];then
+		echo "Enter correct input"
+	else
+		break
+	fi
+done
+
+while true; do
+	read -p "Want to save CONTCAR? 1=YES, 2=NO: " save_contcar
+	if [ "$save_contcar" == 2 ]; then
+		rm CONTCAR
+		break
+	elif [ "$save_contcar" != 2 ] && [ "$save_contcar" != 1 ];then
+		echo "Enter correct input"
+	else
+		break
+	fi
+done
+
+#clean up directory
+rm 27 C* D* E* IBZKPT OSZICAR OUTCAR PCDAT PROCAR REPORT XDATCAR *.out *.sh v*
+
+#make changes to INCAR
+read -p "Enter NELM: " user_NELM
+sed '/NELM =/d' INCAR >> user_INCAR
+echo " NELM = $user_NELM        # max number of electronic steps" >> user_INCAR
+rm INCAR
+mv user_INCAR INCAR
+
+read -p "Enter NPAR(FACTOR OF #CORES): " user_NPAR
+sed '/NPAR =/d' INCAR >> user_INCAR
+echo " NPAR = $user_NPAR" >> user_INCAR
+rm INCAR
+mv user_INCAR INCAR
+
+read -p "Enter IBRION(0=MD,1=QNR,2=GRAD,3=DAMP: " user_IBRION
+sed '/IBRION =/d' INCAR >> user_INCAR
+echo " IBRION = $user_IBRION    # method of geometry opts 0 - MD, 1- Qausi Newton Raphson, 2 - Cong. Grad. 3- damped movement" >> user_INCAR
+rm INCAR
+mv user_INCAR INCAR
+
+if [ "$user_IBRION" == 0 ];then
+	read -p "Enter TEBEG(Beginning Temperature): " user_TEBEG
+	sed '/TEBEG =/d' INCAR >> user_INCAR
+	echo " TEBEG = $user_TEBEG    #Beginning Temperature for MD run" >> user_INCAR
+	rm INCAR
+	mv user_INCAR INCAR
+	read -p "Enter TEEND(Final Temperature): " user_TEEND
+        sed '/TEEND =/d' INCAR >> user_INCAR
+        echo " TEEND = $user_TEEND    #Beginning Temperature for MD run" >> user_INCAR
+        rm INCAR
+        mv user_INCAR INCAR
+fi
+
+read -p "Enter LAECHG(Bader Charge)(.TRUE or .FALSE): " user_LAECHG
+sed '/LAECHG =/d' INCAR >> user_INCAR
+echo " LAECHG = $user_LAECHG  # set to true if you want " >> user_INCAR
+rm INCAR
+mv user_INCAR INCAR
+
+read -p "Enter NSW: " user_NSW
+sed '/NSW =/d' INCAR >> user_INCAR
+echo "  NSW = $user_NSW      # number of geometry steps " >> user_INCAR
+rm INCAR
+mv user_INCAR INCAR
+
+read -p "Enter LSOL(.TRUE or .FALSE): " user_LSOL
+sed '/LSOL =/d' INCAR >> user_INCAR
+echo "  LSOL = $user_LSOL      #adds water implicit solvent" >> user_INCAR
+rm INCAR
+mv user_INCAR INCAR
+
+while true; do
+	read -p "Do you want to change NELECT??? 1=YES,0=NO: " input
+	if [ "$input" == 1 ];then
+		read -p "Enter NELECT: " user_NELECT
+		sed '/NELECT =/d' INCAR >> user_INCAR
+		echo " NELECT = $user_NELECT     #Number of Valence Electrons (Default is equal to sum of ZVAL in POTCAR) " >> user_INCAR
+		rm INCAR
+		mv user_INCAR INCAR
+	break
+	elif [ "$input" == 0 ];then
+	break
+	else
+		echo "Please enter a correct input."
+	fi
+done
+
+#Check KPOINTS/POSCAR
+
+more KPOINTS
+read -p "1=Quit: " pass
+
+if [ "$pass" == 1 ]; then
+	exit
+fi
+
+less POSCAR
+read -p"1=Quit: " pass
+
+if [ "$pass" == 1 ]; then
+        exit
+fi
+
+#Check POTCAR
+grep PAW_PBE POTCAR
+read -p"1=Quit: " pass
+
+if [ "$pass" == 1 ]; then
+        exit
+fi
+
+#Run VASPJOB
+
+while true;do
+read -p "Want to run a VASPJOB? 1=YES, 2=NO: " run
+	if [ "$run" == 2 ]; then
+		exit
+	elif [ "$run" != 2 ] && [ "$run" != 1 ];then
+		echo "Enter correct input"
+	else
+		#clean up directory
+		rm 27 C* D* E* IBZKPT OSZICAR OUTCAR PCDAT PROCAR REPORT XDATCAR *.out *.sh v*
+
+		read -p "Enter #CORES #HOURS #JOBNAME: " cores hours jobName
+		echo "$cores $hours $jobName "
+		while true; do
+			read -p "Explicit(1) or Implicit(0) Solvent? " run
+			if [ "$run" == 1 ]; then
+				qvasp_gamma $cores $hours $jobName
+				echo "$cores $hours $jobName "
+				break
+			elif [ "$run" == 0 ]; then
+				qvasp_sol_gam $cores $hours $jobName
+				echo "$cores $hours $jobName "
+				break
+			else
+				echo "Please enter a correct value "
+			fi
+		done
+		break
+	fi
+done
+
+more ~/bin/periodicTable
+#Show if job is running
+sleep 11
+squeue -u tbart
+sleep 19
+tail -f OSZICAR

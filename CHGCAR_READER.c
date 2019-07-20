@@ -44,11 +44,6 @@ int main()
 
         int i = 0, j = 0, m, n = 0;
 
-	printf("C-CODE\n");
-
-	//FINENESS OF FFT GRID IS STORED
-	printf("%d %d %d\n",NGXF,NGYF,NGZF);
-
 	//densities AND densityMatrix ARRAYS ARE INITIALIZED
 	double densities[NGXF*NGYF*NGZF];
 	double densityMatrix[NGXF][NGYF][NGZF];
@@ -98,7 +93,7 @@ int main()
 		 *LIMITS ELEMENT SIZE TO TOTAL DIVISIONS
 		 *ONLY READS IN 5 ELEMENTS AT A TIME
 		 */
-		if(i > 11
+		if(i >= 11
 		&& j < NGXF*NGYF*NGZF
 		&& sscanf(line,"%lf %lf %lf %lf %lf",&a,&b,&c,&d,&e) == 5){
 			densities[j] = a;

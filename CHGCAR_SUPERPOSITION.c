@@ -79,14 +79,11 @@ printf("Atoms read in:\n");
 
 	//Write data into NAIVE_CHGCAR file
 	//Prints data to CHGCAR_DATA in a format acceptable for later CHGCAR use
-	for(i=0;i<NGXF*NGYF*NGZF;i++){
-		if( (i + 1) % 5 == 0
-		&& i != 0 ){
-			fprintf(NAIVE_CHGCAR_WRITE,"%lf\n",naive_densities[i]);
-                }
-		else{
-			fprintf(NAIVE_CHGCAR_WRITE,"%lf ",naive_densities[i]);
-		}
+
+	for(i=0;i<NGXF*NGYF*NGZF;i+=5){
+		
+		fprintf(NAIVE_CHGCAR_WRITE, "%18.11lf%18.11lf%18.11lf%18.11lf%18.11lf\n", naive_densities[i], naive_densities[i+1], naive_densities[i+2], naive_densities[i+3], naive_densities[i+4]);
 	}
+
 	fclose(NAIVE_CHGCAR_WRITE);
 }

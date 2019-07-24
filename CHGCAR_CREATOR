@@ -196,7 +196,7 @@ do
 			fi
 
 			#Create augmenter file
-			echo "${aug_array[0]} ${aug_array[1]} $k ${aug_array[3]}" >> ../AUGMENTER
+			printf "%12s%12s%4d%4d\n" ${aug_array[0]} ${aug_array[1]} $k ${aug_array[3]} >> ../AUGMENTER
 			grep -A $end_line "augmentation occupancies" CHGCAR | tail -$end_line >> ../AUGMENTER
 			k=$(( k+1 ))
 		done
